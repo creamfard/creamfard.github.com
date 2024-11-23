@@ -1,0 +1,56 @@
+import requests
+from bs4 import BeautifulSoup
+import pymysql.cursors
+class NewsScraper:
+    def __init__(self, db_host, db_user, db_password, db_name, db_charset='utf8'):
+        self.conn = pymysql.connect(host=db_host,
+                                    user=db_user,
+                                    password=db_password,
+                                    db=db_name,
+                                    charset=db_charset)
+        self.a = 0
+        self.a1 = 0
+    def fetch_news(self, url):
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return soup
+    def insert_news_to_db(self, f, j, d, e, i):
+        with self.conn.cursor() as cursor:
+            sql = ("INSERT INTO news(DATE, categori, title, publisher, TEXT) "
+                   "VALUES (%s, %s, %s, %s, %s)")
+            cursor.execute(sql, (f, j, d, e, i))
+            self.conn.commit()
+            print(sql, (f, j, d, e, i))
+    def scrape_and_store_news(self, start_url):
+        soup = self.fetch_news(start_url)
+        while True:
+            try:
+                for tag in soup.select("td.content"):
+                    for dl in tag.select("dl"):
+                        self.a1 += 1
+                        b = dl.select("a")[0].get("href")
+                        if self.a1 == 96 or self.a1 == 105:
+                            continue
+                        soup1 = self.fetch_news(b)
+                        d = soup1.select("title")[0].text
+                        e = dl.select("span.writing")[0].text
+                        f = dl.select("span.date")[0].text
+                        i = soup1.select("article#dic_area")[0].text
+                        j = soup1.select('li.Nlist_item._LNB_ITEM.is_active')[0].text
+                        self.insert_news_to_db(f, j, d, e, i)
+                    for div in tag.select("div.paging"):
+                        g = div.select("a")[self.a].get("href")
+                        self.a += 1
+                        next_page_url = 'https://news.naver.com/main/list.naver' + g
+                        soup = self.fetch_news(next_page_url)
+            except Exception as e:
+                break
+    def close_connection(self):
+        self.conn.close()
+scraper = NewsScraper(db_host='183.100.18.224',
+                      db_user='root',
+                      db_password='swhacademy!',
+                      db_name='ParkGeon')
+start_url = 'https://news.naver.com/main/list.naver?mode=LS2D&sid1=105&mid=shm&date=20240309&page=1'
+scraper.scrape_and_store_news(start_url)
+scraper.close_connection()
